@@ -1,0 +1,195 @@
+<!DOCTYPE html><html lang="pt-br"><head><meta charset="UTF-8"/><title>Sistema Completo</title>
+<style>
+body{margin:0;font-family:Arial;background:#f0f0f0;color:#222;transition:.3s}
+.dark{background:#121212;color:#eee}
+header{background:#6200ea;padding:15px;color:#fff;text-align:center;font-size:22px;font-weight:bold}
+.container{max-width:1000px;margin:20px auto}
+.card{background:#fff;padding:20px;border-radius:10px;box-shadow:0 0 10px #0002;margin-bottom:20px}
+.dark .card{background:#1e1e1e;color:#eee}
+input,button,select{padding:10px;margin:5px 0;width:100%;border-radius:5px;border:1px solid #ccc}
+button{cursor:pointer;background:#6200ea;color:#fff;border:0}
+button.red{background:#c00}
+table{width:100%;border-collapse:collapse;margin-top:10px}
+th,td{padding:10px;border-bottom:1px solid #ccc}
+tr:hover{background:#eee}
+.dark tr:hover{background:#333}
+#chatBox{height:250px;overflow-y:auto;border:1px solid #ccc;padding:10px;background:#fafafa;border-radius:5px}
+.dark #chatBox{background:#222}
+.msg{padding:8px 12px;background:#6200ea;color:#fff;margin-top:10px;width:fit-content;border-radius:8px}
+.msg.other{background:#444;margin-left:auto}
+#editor{width:100%;height:120px;border:1px solid #ccc;border-radius:5px;padding:10px;overflow-y:auto;background:#fff}
+.dark #editor{background:#222;color:#fff}
+.avatar{width:40px;height:40px;border-radius:50%;object-fit:cover}
+.flex{display:flex;align-items:center;gap:10px}
+</style>
+</head>
+<body>
+
+<header>APP COMPLETO EM 1 ARQUIVO</header>
+
+<div class="container" id="auth">
+<div class="card">
+<h3>Registrar</h3>
+<input id="rUser" placeholder="Usuário">
+<input id="rPass" type="password" placeholder="Senha">
+<button onclick="register()">Registrar</button>
+</div>
+
+<div class="card">
+<h3>Login</h3>
+<input id="lUser" placeholder="Usuário">
+<input id="lPass" type="password" placeholder="Senha">
+<button onclick="login()">Entrar</button>
+</div>
+</div>
+
+<div class="container" id="app" style="display:none">
+
+<div class="card flex">
+<h2 style="flex:1">Painel</h2>
+<button onclick="toggleTheme()">Tema</button>
+<button class="red" onclick="logout()">Sair</button>
+</div>
+
+<div class="card">
+<h3>CRUD</h3>
+<input id="cName" placeholder="Nome">
+<input id="cEmail" placeholder="Email">
+<button onclick="addUser()">Adicionar</button>
+<input id="search" placeholder="Buscar..." oninput="loadUsers()">
+<table>
+<thead><tr><th>Avatar</th><th>Nome</th><th>Email</th><th></th></tr></thead>
+<tbody id="tbody"></tbody>
+</table>
+<button onclick="exportData()">Exportar JSON</button>
+<input type="file" id="importFile" onchange="importData(event)">
+</div>
+
+<div class="card">
+<h3>Editor de Texto</h3>
+<div id="editor" contenteditable="true"></div>
+<button onclick="saveEditor()">Salvar Texto</button>
+</div>
+
+<div class="card">
+<h3>Upload de Avatar</h3>
+<input type="file" id="avatarFile" accept="image/*" onchange="uploadAvatar(event)">
+<img id="previewAvatar" class="avatar">
+</div>
+
+<div class="card">
+<h3>Chat P2P WebRTC</h3>
+<div class="flex">
+<button onclick="initRTC()">Iniciar Canal</button>
+</div>
+<textarea id="offer" placeholder="Offer" style="width:100%;height:80px"></textarea>
+<button onclick="setOffer()">Enviar Offer</button>
+<textarea id="answer" placeholder="Answer" style="width:100%;height:80px"></textarea>
+<button onclick="setAnswer()">Enviar Answer</button>
+<div id="chatBox"></div>
+<input id="chatInput" placeholder="Mensagem" onkeypress="if(event.key==='Enter')sendMsg()">
+<button onclick="sendMsg()">Enviar</button>
+</div>
+
+<div class="card">
+<h3>Dashboard</h3>
+<canvas id="chart" width="400" height="150"></canvas>
+</div>
+
+</div>
+
+<script>
+let db=JSON.parse(localStorage.getItem("db")||`{"users":[],"editor":"","avatars":{},"logs":[]}`);
+function save(){localStorage.setItem("db",JSON.stringify(db))}
+function register(){
+if(rUser.value&&rPass.value){
+db.users.push({id:Date.now(),name:rUser.value,email:rUser.value+"@mail.com",pass:rPass.value});
+save();alert("Registrado");
+}else alert("Preencha");
+}
+function login(){
+let u=db.users.find(x=>x.name===lUser.value&&x.pass===lPass.value);
+if(!u)return alert("Inválido");
+localStorage.setItem("session",u.id);auth.style.display="none";app.style.display="block";loadUsers();loadEditor();loadAvatar();drawChart();
+}
+function logout(){localStorage.removeItem("session");location.reload()}
+function addUser(){
+if(!cName.value||!cEmail.value)return alert("Preencha");
+db.users.push({id:Date.now(),name:cName.value,email:cEmail.value});
+save();loadUsers();cName.value=cEmail.value="";
+}
+function loadUsers(){
+let s=search.value.toLowerCase();
+tbody.innerHTML="";
+db.users.filter(u=>u.name.toLowerCase().includes(s)||u.email.toLowerCase().includes(s))
+.forEach(u=>{
+tbody.innerHTML+=`<tr>
+<td><img src="${db.avatars[u.id]||''}" class="avatar"></td>
+<td><input value="${u.name}" onchange="edit(${u.id},'name',this.value)"></td>
+<td><input value="${u.email}" onchange="edit(${u.id},'email',this.value)"></td>
+<td><button class='red' onclick="del(${u.id})">X</button></td>
+</tr>`;
+});
+}
+function edit(id,f,v){let u=db.users.find(x=>x.id===id);u[f]=v;save()}
+function del(id){db.users=db.users.filter(x=>x.id!==id);save();loadUsers()}
+function exportData(){let a=document.createElement("a");a.href="data:application/json,"+JSON.stringify(db);a.download="data.json";a.click()}
+function importData(e){let f=new FileReader();f.onload=()=>{db=JSON.parse(f.result);save();loadUsers()};f.readAsText(e.target.files[0])}
+function saveEditor(){db.editor=editor.innerHTML;save()}
+function loadEditor(){editor.innerHTML=db.editor}
+function uploadAvatar(e){
+let f=new FileReader();
+let id=localStorage.getItem("session");
+f.onload=()=>{db.avatars[id]=f.result;previewAvatar.src=f.result;save();loadUsers()};
+f.readAsDataURL(e.target.files[0]);
+}
+function loadAvatar(){
+let id=localStorage.getItem("session");
+previewAvatar.src=db.avatars[id]||"";
+}
+
+/* THEME */
+function toggleTheme(){document.body.classList.toggle("dark")}
+
+/* WEBRTC */
+let pc,dc;
+function initRTC(){
+pc=new RTCPeerConnection();
+dc=pc.createDataChannel("chat");
+dc.onmessage=e=>receiveMsg(e.data);
+pc.onicecandidate=e=>{if(e.candidate)return;offer.value=JSON.stringify(pc.localDescription)};
+pc.createOffer().then(o=>pc.setLocalDescription(o));
+}
+function setOffer(){
+pc=new RTCPeerConnection();
+pc.ondatachannel=e=>dc=e.channel;
+pc.onicecandidate=e=>{if(e.candidate)return;answer.value=JSON.stringify(pc.localDescription)};
+pc.setRemoteDescription(JSON.parse(offer.value));
+pc.createAnswer().then(a=>pc.setLocalDescription(a));
+}
+function setAnswer(){
+    pc.setRemoteDescription(JSON.parse(answer.value))
+}
+function sendMsg() {
+let t=chatInput.value;if(!t)return;
+receiveMsg("Você: "+t);
+if(dc)dc.send("Outro: "+t);
+chatInput.value = "";
+}
+function receiveMsg(m){
+chatBox.innerHTML+=`<div class="msg">${m}</div>`;
+chatBox.scrollTop=chatBox.scrollHeight;
+}
+
+/* CHART */
+function drawChart(){
+let c=document.getElementById("chart").getContext("2d");
+let d=db.users.length;
+c.fillStyle="#6200ea";
+c.fillRect(10,140-d*5,50,d*5);
+c.fillStyle="#000";
+c.fillText("Usuários: "+d,10,20);
+}
+</script>
+
+</body></html>
